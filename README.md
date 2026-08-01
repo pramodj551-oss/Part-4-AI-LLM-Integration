@@ -68,7 +68,7 @@ Incident-Knowledge-Assistant/
 ├── .gitignore
 │
 ├── data/
-│   └── incidents.csv
+│   └── employee_attrition.csv
 │
 ├── vector_store/
 │   ├── faiss.index
@@ -191,7 +191,7 @@ Place the incident dataset in the project's data directory:
 
 ```
 data/
-└── incidents.csv
+└── employee_attrition.csv
 ```
 
 Generate embeddings and build the FAISS index before launching the application.
