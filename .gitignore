@@ -1,0 +1,93 @@
+# ==========================================================
+# Incident Knowledge Assistant (RAG)
+# .gitignore
+# ==========================================================
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# Environment Variables
+.env
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# VS Code
+.vscode/
+
+# PyCharm
+.idea/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Python Packaging
+build/
+dist/
+*.egg-info/
+
+# Logs
+logs/
+*.log
+
+# Streamlit Cache
+.streamlit/cache/
+
+# Pytest
+.pytest_cache/
+
+# MyPy
+.mypy_cache/
+
+# Ruff
+.ruff_cache/
+
+# Coverage
+.coverage
+htmlcov/
+
+# Vector Database
+vector_store/
+*.faiss
+*.index
+*.pkl
+
+# Model Files
+models/
+*.bin
+*.pt
+*.pth
+
+# Generated Outputs
+outputs/
+reports/
+temp/
+tmp/
+
+# Local Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Backup Files
+*.bak
+*.old
+*.tmp
+
+# OS Generated Files
+ehthumbs.db
+
+# Local Secrets
+secrets.toml
