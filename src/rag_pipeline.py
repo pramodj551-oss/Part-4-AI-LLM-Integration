@@ -7,7 +7,7 @@ rag_pipeline.py
 Author : Pramod Prakash Jadhav
 ==========================================================
 
-End-to-End Retrieval Augmented Generation Pipeline.
+Production-ready Retrieval Augmented Generation Pipeline.
 """
 
 from src.logger import get_logger
@@ -21,56 +21,83 @@ class RAGPipeline:
     """
     Production-ready RAG Pipeline.
 
-    Responsibilities
-    ----------------
-    1. Retrieve relevant documents
-    2. Build context
-    3. Generate LLM response
+    Pipeline Flow
+    -------------
+    User Question
+          │
+          ▼
+      Retriever
+          │
+          ▼
+      Relevant Context
+          │
+          ▼
+      LLM Generation
+          │
+          ▼
+      Final Answer
     """
 
     def __init__(self):
         """
-        Initialize pipeline components.
+        Initialize all pipeline components.
         """
 
         logger.info("=" * 60)
         logger.info("Initializing RAG Pipeline")
         logger.info("=" * 60)
 
-        self.retriever = Retriever()
+        try:
 
-        self.llm = LLMEngine()
+            self.retriever = Retriever()
 
-        self.llm.load_model()
+            logger.info(
+                "Retriever initialized successfully."
+            )
 
-        logger.info(
-            "RAG Pipeline initialized successfully."
-        )
+            self.llm = LLMEngine()
+
+            self.llm.load_model()
+
+            logger.info(
+                "LLM initialized successfully."
+            )
+
+            logger.info(
+                "RAG Pipeline initialized successfully."
+            )
+
+        except Exception as error:
+
+            logger.exception(
+                "Pipeline initialization failed."
+            )
+
+            raise RuntimeError(
+                f"Unable to initialize the AI Assistant: {error}"
+            ) from error
 
     # ======================================================
-    # Retrieve Documents
+    # Retrieve Context
     # ======================================================
 
     def retrieve(
         self,
         question: str,
-        top_k=None
+        top_k=None,
     ):
         """
-        Retrieve relevant documents.
+        Retrieve relevant context.
 
         Parameters
         ----------
         question : str
-            User question.
 
         top_k : int | None
-            Number of documents to retrieve.
 
         Returns
         -------
         dict
-            Retrieved documents and context.
         """
 
         logger.info("=" * 60)
@@ -85,46 +112,35 @@ class RAGPipeline:
 
         if top_k is None:
 
-            result = self.retriever.retrieve_context(
+            return self.retriever.retrieve_context(
                 query=question
             )
 
-        else:
-
-            result = self.retriever.retrieve_context(
-                query=question,
-                top_k=top_k
+        return self.retriever.retrieve_context(
+            query=question,
+            top_k=top_k,
             )
-
-        logger.info(
-            f"Retrieved {result['document_count']} documents."
-        )
-
-        return result
-          # ======================================================
+            # ======================================================
     # Generate Answer
     # ======================================================
 
     def generate_answer(
         self,
         question: str,
-        context: str
+        context: str,
     ):
         """
-        Generate final answer using LLM.
+        Generate answer using the LLM.
 
         Parameters
         ----------
         question : str
-            User question.
 
         context : str
-            Retrieved knowledge context.
 
         Returns
         -------
         str
-            Generated answer.
         """
 
         logger.info("=" * 60)
@@ -134,102 +150,115 @@ class RAGPipeline:
         if not context.strip():
 
             logger.warning(
-                "Empty context received."
+                "No context available."
             )
 
             return (
-                "I could not find the answer "
-                "in the knowledge base."
+                "I could not find any relevant "
+                "information in the knowledge base."
             )
 
-        answer = self.llm.ask(
-            question=question,
-            context=context
-        )
+        try:
 
-        logger.info(
-            "Answer generated successfully."
-        )
+            answer = self.llm.ask(
+                question=question,
+                context=context,
+            )
 
-        return answer
+            if answer is None:
 
+                logger.warning(
+                    "LLM returned None."
+                )
 
-    # ======================================================
+                return (
+                    "The language model did not "
+                    "return a response."
+                )
+
+            answer = str(answer).strip()
+
+            if answer == "":
+
+                logger.warning(
+                    "LLM returned an empty response."
+                )
+
+                return (
+                    "The language model returned "
+                    "an empty response."
+                )
+
+            logger.info(
+                "Answer generated successfully."
+            )
+
+            return answer
+
+        except Exception as error:
+
+            logger.exception(
+                "LLM generation failed."
+            )
+
+            return (
+                "An error occurred while generating "
+                f"the answer: {error}"
+            )
+                # ======================================================
     # Complete RAG Query
     # ======================================================
 
     def ask(
         self,
         question: str,
-        top_k=None
+        top_k=None,
     ):
         """
-        Complete RAG pipeline execution.
-
-        Flow:
-        Question
-            ↓
-        Retriever
-            ↓
-        Context
-            ↓
-        LLM
-            ↓
-        Answer
+        Execute the complete RAG pipeline.
 
         Parameters
         ----------
         question : str
-            User query.
 
         top_k : int | None
-            Number of documents.
 
         Returns
         -------
         dict
-            Complete RAG response.
         """
 
         logger.info("=" * 60)
-        logger.info(
-            "Processing RAG Query"
-        )
+        logger.info("Processing RAG Query")
         logger.info("=" * 60)
 
         retrieval_result = self.retrieve(
             question=question,
-            top_k=top_k
+            top_k=top_k,
         )
 
         context = retrieval_result.get(
             "context",
-            ""
+            "",
         )
 
         answer = self.generate_answer(
             question=question,
-            context=context
+            context=context,
         )
 
         response = {
-
             "question": question,
-
             "answer": answer,
-
             "context": context,
-
             "documents": retrieval_result.get(
                 "documents",
-                []
+                [],
             ),
-
             "document_count": retrieval_result.get(
                 "document_count",
-                0
+                0,
             ),
-
         }
 
         logger.info(
@@ -237,34 +266,24 @@ class RAGPipeline:
         )
 
         return response
-          # ======================================================
+
+    # ======================================================
     # Health Check
     # ======================================================
 
     def health_check(self):
         """
-        Check whether all pipeline components are ready.
-
-        Returns
-        -------
-        dict
-            Pipeline health status.
+        Return pipeline health information.
         """
 
-        logger.info("Running pipeline health check...")
-
-        retriever_info = self.retriever.get_retrieval_info()
-
-        llm_info = self.llm.get_model_info()
+        logger.info(
+            "Running health check..."
+        )
 
         return {
-
             "status": "healthy",
-
-            "retriever": retriever_info,
-
-            "llm": llm_info,
-
+            "retriever": self.retriever.get_retrieval_info(),
+            "llm": self.llm.get_model_info(),
         }
 
     # ======================================================
@@ -277,19 +296,14 @@ class RAGPipeline:
         """
 
         return {
-
             "pipeline": "Retrieval Augmented Generation",
-
             "version": "1.0",
-
             "retriever": type(
                 self.retriever
             ).__name__,
-
             "llm": type(
                 self.llm
             ).__name__,
-
         }
 
 
@@ -307,9 +321,7 @@ if __name__ == "__main__":
 
         pipeline = RAGPipeline()
 
-        question = (
-            "How can I reset my password?"
-        )
+        question = "How can I reset my password?"
 
         result = pipeline.ask(
             question=question
@@ -328,7 +340,7 @@ if __name__ == "__main__":
 
         for index, document in enumerate(
             result["documents"],
-            start=1
+            start=1,
         ):
 
             logger.info(
@@ -342,14 +354,12 @@ if __name__ == "__main__":
 
         logger.info("=" * 60)
         logger.info("Health Check")
-
         logger.info(
             pipeline.health_check()
         )
 
         logger.info("=" * 60)
         logger.info("Pipeline Information")
-
         logger.info(
             pipeline.get_pipeline_info()
         )
@@ -360,10 +370,11 @@ if __name__ == "__main__":
         )
         logger.info("=" * 60)
 
-    except Exception as error:
+    except Exception:
 
         logger.exception(
             "RAG Pipeline execution failed."
         )
 
-        raise error
+        raise
+        
