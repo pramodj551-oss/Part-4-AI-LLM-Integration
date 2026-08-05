@@ -14,15 +14,16 @@ import logging
 from pathlib import Path
 
 from src.config import (
-    LOGS_DIR,
+    LOG_DIR,
     LOG_FILE,
 )
+
 
 # ==========================================================
 # Create Logs Directory
 # ==========================================================
 
-Path(LOGS_DIR).mkdir(
+Path(LOG_DIR).mkdir(
     parents=True,
     exist_ok=True
 )
