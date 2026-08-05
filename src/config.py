@@ -135,14 +135,11 @@ MINIMUM_SIMILARITY_SCORE = 0.0
 MAX_CONTEXT_DOCUMENTS = 5
 
 # ==========================================================
-# Ollama Configuration
+# ==========================================================
+# Groq Configuration
 # ==========================================================
 
-OLLAMA_BASE_URL = (
-    "http://localhost:11434"
-)
-
-OLLAMA_MODEL = "gemma3:4b"
+GROQ_MODEL = "llama-3.1-8b-instant"
 
 REQUEST_TIMEOUT = 120
 
