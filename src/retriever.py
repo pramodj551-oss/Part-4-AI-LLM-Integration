@@ -7,29 +7,37 @@ retriever.py
 Author : Pramod Prakash Jadhav
 ==========================================================
 
-Retrieve relevant documents from FAISS vector database.
+Production-ready Retriever with automatic FAISS
+index creation for first deployment.
 """
+
+from pathlib import Path
 
 from sentence_transformers import SentenceTransformer
 
 from src.config import (
     EMBEDDING_MODEL,
     TOP_K_RESULTS,
+    FAISS_INDEX_PATH,
+    DOCUMENTS_PATH,
 )
+
 from src.logger import get_logger
 from src.vector_store import VectorStore
+from src.data_loader import DataLoader
+from src.embeddings import generate_embeddings
 
 logger = get_logger()
 
 
 class Retriever:
     """
-    Retrieve relevant documents using semantic search.
+    Production-ready semantic retriever.
     """
 
     def __init__(self):
         """
-        Initialize embedding model and vector store.
+        Initialize retriever.
         """
 
         logger.info("=" * 60)
@@ -42,32 +50,88 @@ class Retriever:
 
         self.vector_store = VectorStore()
 
-        self.vector_store.load()
+        self._initialize_vector_store()
 
         logger.info(
             "Retriever initialized successfully."
         )
 
     # ======================================================
+    # Initialize Vector Store
+    # ======================================================
+
+    def _initialize_vector_store(self):
+        """
+        Load an existing FAISS index.
+        If it does not exist, automatically build it.
+        """
+
+        if (
+            Path(FAISS_INDEX_PATH).exists()
+            and
+            Path(DOCUMENTS_PATH).exists()
+        ):
+
+            logger.info(
+                "Existing FAISS index found."
+            )
+
+            self.vector_store.load()
+
+            return
+
+        logger.warning(
+            "FAISS index not found."
+        )
+
+        logger.info(
+            "Creating vector database..."
+        )
+
+        loader = DataLoader()
+
+        loader.load_data()
+
+        loader.validate_dataset()
+
+        loader.remove_duplicates()
+
+        loader.handle_missing_values()
+
+        documents = loader.prepare_documents()
+
+        _, embeddings = generate_embeddings(
+            documents
+        )
+
+        self.vector_store.build_index(
+            embeddings,
+            documents,
+        )
+
+        self.vector_store.save()
+
+        logger.info(
+            "Vector database created successfully."
+        )
+            # ======================================================
     # Embed Query
     # ======================================================
 
     def embed_query(
         self,
-        query: str
+        query: str,
     ):
         """
-        Convert user query into embedding.
+        Convert a user query into an embedding.
 
         Parameters
         ----------
         query : str
-            User question.
 
         Returns
         -------
         numpy.ndarray
-            Query embedding.
         """
 
         if not query.strip():
@@ -90,14 +154,15 @@ class Retriever:
         )
 
         return embedding
-          # ======================================================
+
+    # ======================================================
     # Retrieve Documents
     # ======================================================
 
     def retrieve(
         self,
         query: str,
-        top_k: int = TOP_K_RESULTS
+        top_k: int = TOP_K_RESULTS,
     ):
         """
         Retrieve the most relevant documents.
@@ -105,15 +170,12 @@ class Retriever:
         Parameters
         ----------
         query : str
-            User query.
 
         top_k : int
-            Number of documents to retrieve.
 
         Returns
         -------
         list
-            List of retrieved documents.
         """
 
         logger.info("=" * 60)
@@ -141,7 +203,7 @@ class Retriever:
 
     def build_context(
         self,
-        retrieved_documents
+        retrieved_documents,
     ):
         """
         Build LLM context from retrieved documents.
@@ -149,16 +211,14 @@ class Retriever:
         Parameters
         ----------
         retrieved_documents : list
-            Output from similarity search.
 
         Returns
         -------
         str
-            Combined context.
         """
 
         logger.info(
-            "Building context for LLM..."
+            "Building context..."
         )
 
         if not retrieved_documents:
@@ -189,7 +249,7 @@ class Retriever:
         )
 
         logger.info(
-            f"Context length : {len(context)} characters"
+            f"Context length: {len(context)} characters"
         )
 
         logger.info(
@@ -197,14 +257,14 @@ class Retriever:
         )
 
         return context
-          # ======================================================
+            # ======================================================
     # Retrieve Context
     # ======================================================
 
     def retrieve_context(
         self,
         query: str,
-        top_k: int = TOP_K_RESULTS
+        top_k: int = TOP_K_RESULTS,
     ):
         """
         Retrieve relevant documents and build context.
@@ -212,21 +272,17 @@ class Retriever:
         Parameters
         ----------
         query : str
-            User query.
 
         top_k : int
-            Number of documents to retrieve.
 
         Returns
         -------
         dict
-            Retrieval result containing query,
-            retrieved documents and context.
         """
 
         documents = self.retrieve(
             query=query,
-            top_k=top_k
+            top_k=top_k,
         )
 
         context = self.build_context(
@@ -241,12 +297,12 @@ class Retriever:
         }
 
     # ======================================================
-    # Retrieval Information
+    # Retriever Information
     # ======================================================
 
     def get_retrieval_info(self):
         """
-        Return retriever information.
+        Return retriever metadata.
         """
 
         info = self.vector_store.get_index_info()
@@ -275,9 +331,7 @@ if __name__ == "__main__":
 
         retriever = Retriever()
 
-        query = (
-            "How can I reset my password?"
-        )
+        query = "How can I reset my password?"
 
         result = retriever.retrieve_context(
             query=query
@@ -292,7 +346,7 @@ if __name__ == "__main__":
 
         for index, item in enumerate(
             result["documents"],
-            start=1
+            start=1,
         ):
 
             logger.info(
@@ -324,11 +378,10 @@ if __name__ == "__main__":
         )
         logger.info("=" * 60)
 
-    except Exception as error:
+    except Exception:
 
         logger.exception(
             "Retriever execution failed."
         )
 
-        raise error
-      
+        raise
