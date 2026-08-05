@@ -7,23 +7,22 @@ llm.py
 Author : Pramod Prakash Jadhav
 ==========================================================
 
-Production-ready LLM Engine using Ollama.
+LLM Engine using Groq API.
 """
 
-import requests
+import streamlit as st
+
+from groq import Groq
 
 from src.logger import get_logger
+
 from src.config import (
-    OLLAMA_BASE_URL,
-    OLLAMA_MODEL,
+    GROQ_MODEL,
     REQUEST_TIMEOUT,
-    SYSTEM_PROMPT,
-    USER_PROMPT_TEMPLATE,
     TEMPERATURE,
     TOP_P,
-    TOP_K,
     MAX_TOKENS,
-    REPEAT_PENALTY,
+    SYSTEM_PROMPT,
 )
 
 logger = get_logger()
@@ -31,73 +30,55 @@ logger = get_logger()
 
 class LLMEngine:
     """
-    Production-ready Ollama LLM Engine.
+    Production-ready Groq LLM Engine.
     """
 
     def __init__(self):
-        """
-        Initialize LLM configuration.
-        """
 
         logger.info("=" * 60)
-        logger.info("Initializing LLM Engine")
+        logger.info("Initializing Groq LLM Engine")
         logger.info("=" * 60)
 
-        self.base_url = OLLAMA_BASE_URL
-
-        self.model = OLLAMA_MODEL
+        self.model = GROQ_MODEL
 
         self.timeout = REQUEST_TIMEOUT
 
-        self.loaded = False
+        self.client = None
 
-    # ======================================================
-    # Load Model
+        self.loaded = False
+            # ======================================================
+    # Load Groq Model
     # ======================================================
 
     def load_model(self):
         """
-        Verify Ollama server and model availability.
-
-        Returns
-        -------
-        bool
+        Initialize the Groq client.
         """
 
-        logger.info(
-            "Checking Ollama server..."
-        )
+        logger.info("=" * 60)
+        logger.info("Loading Groq Client")
+        logger.info("=" * 60)
 
         try:
 
-            response = requests.get(
-                f"{self.base_url}/api/tags",
-                timeout=self.timeout,
+            api_key = st.secrets.get(
+                "GROQ_API_KEY"
             )
 
-            response.raise_for_status()
+            if not api_key:
 
-            models = response.json().get(
-                "models",
-                []
-            )
-
-            available_models = [
-                model.get("name", "")
-                for model in models
-            ]
-
-            if self.model not in available_models:
-
-                raise RuntimeError(
-                    f"Model '{self.model}' "
-                    "is not available in Ollama."
+                raise ValueError(
+                    "GROQ_API_KEY not found in Streamlit Secrets."
                 )
+
+            self.client = Groq(
+                api_key=api_key
+            )
 
             self.loaded = True
 
             logger.info(
-                f"Model loaded: {self.model}"
+                f"Groq model loaded: {self.model}"
             )
 
             return True
@@ -105,23 +86,44 @@ class LLMEngine:
         except Exception as error:
 
             logger.exception(
-                "Unable to initialize Ollama."
+                "Failed to initialize Groq client."
             )
 
             raise RuntimeError(
-                f"Unable to connect to Ollama: {error}"
+                f"Unable to initialize Groq: {error}"
             ) from error
-                # ======================================================
-    # Build Prompt
+
+    # ======================================================
+    # Model Information
     # ======================================================
 
-    def build_prompt(
+    def get_model_info(self):
+        """
+        Return LLM information.
+        """
+
+        return {
+
+            "provider": "Groq",
+
+            "model": self.model,
+
+            "loaded": self.loaded,
+
+            "timeout": self.timeout,
+
+    }
+            # ======================================================
+    # Ask LLM
+    # ======================================================
+
+    def ask(
         self,
         question: str,
-        context: str,
-    ) -> str:
+        context: str
+    ):
         """
-        Build the final prompt for the LLM.
+        Generate answer using Groq LLM.
 
         Parameters
         ----------
@@ -134,60 +136,6 @@ class LLMEngine:
         Returns
         -------
         str
-            Complete prompt.
-        """
-
-        logger.info(
-            "Building prompt..."
-        )
-
-        if not question.strip():
-
-            raise ValueError(
-                "Question cannot be empty."
-            )
-
-        if context is None:
-
-            context = ""
-
-        prompt = (
-            SYSTEM_PROMPT.strip()
-            + "\n\n"
-            + USER_PROMPT_TEMPLATE.format(
-                context=context.strip(),
-                question=question.strip(),
-            )
-        )
-
-        logger.info(
-            f"Prompt length: {len(prompt)} characters"
-        )
-
-        return prompt
-            # ======================================================
-    # Ask LLM
-    # ======================================================
-
-    def ask(
-        self,
-        question: str,
-        context: str,
-    ) -> str:
-        """
-        Generate an answer using Ollama.
-
-        Parameters
-        ----------
-        question : str
-            User question.
-
-        context : str
-            Retrieved knowledge context.
-
-        Returns
-        -------
-        str
             Generated answer.
         """
 
@@ -195,101 +143,80 @@ class LLMEngine:
 
             self.load_model()
 
-        prompt = self.build_prompt(
-            question=question,
-            context=context,
+        if not question.strip():
+
+            raise ValueError(
+                "Question cannot be empty."
+            )
+
+        prompt = f"""
+Context:
+{context}
+
+Question:
+{question}
+
+Answer:
+"""
+
+        logger.info(
+            "Sending request to Groq..."
         )
-
-        payload = {
-            "model": self.model,
-            "prompt": prompt,
-            "stream": False,
-            "options": {
-                "temperature": TEMPERATURE,
-                "top_p": TOP_P,
-                "top_k": TOP_K,
-                "num_predict": MAX_TOKENS,
-                "repeat_penalty": REPEAT_PENALTY,
-            },
-        }
-
-        logger.info("=" * 60)
-        logger.info("Sending request to Ollama")
-        logger.info("=" * 60)
 
         try:
 
-            response = requests.post(
-                f"{self.base_url}/api/generate",
-                json=payload,
-                timeout=self.timeout,
+            response = self.client.chat.completions.create(
+
+                model=self.model,
+
+                messages=[
+                    {
+                        "role": "system",
+                        "content": SYSTEM_PROMPT,
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt,
+                    },
+                ],
+
+                temperature=TEMPERATURE,
+
+                top_p=TOP_P,
+
+                max_completion_tokens=MAX_TOKENS,
             )
 
-            response.raise_for_status()
-
-            result = response.json()
-
-            answer = result.get(
-                "response",
-                "",
-            ).strip()
-
-            if not answer:
-
-                logger.warning(
-                    "LLM returned an empty response."
-                )
-
-                return (
-                    "The language model returned "
-                    "an empty response."
-                )
+            answer = (
+                response
+                .choices[0]
+                .message
+                .content
+                .strip()
+            )
 
             logger.info(
-                "LLM response generated successfully."
+                "Response generated successfully."
             )
 
             return answer
 
-        except requests.Timeout:
-
-            logger.exception(
-                "Ollama request timed out."
-            )
-
-            return (
-                "The request to the language model "
-                "timed out."
-            )
-
-        except requests.RequestException as error:
-
-            logger.exception(
-                "Failed to communicate with Ollama."
-            )
-
-            return (
-                "Unable to communicate with the "
-                f"language model: {error}"
-            )
-
         except Exception as error:
 
             logger.exception(
-                "Unexpected error during inference."
+                "Groq request failed."
             )
 
-            return (
-                "An unexpected error occurred while "
-                f"generating the response: {error}"
-    )
+            raise RuntimeError(
+                f"Groq API Error: {error}"
+            ) from error
                 # ======================================================
-    # Model Information
+    # Health Check
     # ======================================================
 
-    def get_model_info(self):
+    def health_check(self):
         """
-        Return information about the configured LLM.
+        Check whether the LLM is ready.
 
         Returns
         -------
@@ -297,11 +224,19 @@ class LLMEngine:
         """
 
         return {
-            "provider": "Ollama",
+
+            "provider": "Groq",
+
             "model": self.model,
-            "base_url": self.base_url,
-            "timeout": self.timeout,
+
             "loaded": self.loaded,
+
+            "status": (
+                "healthy"
+                if self.loaded
+                else "not_loaded"
+            ),
+
         }
 
 
@@ -312,38 +247,32 @@ class LLMEngine:
 if __name__ == "__main__":
 
     logger.info("=" * 60)
-    logger.info("LLM Engine Demonstration")
+    logger.info("Groq LLM Demonstration")
     logger.info("=" * 60)
 
     try:
 
-        engine = LLMEngine()
+        llm = LLMEngine()
 
-        engine.load_model()
+        llm.load_model()
 
-        sample_question = (
-            "How can I reset my password?"
+        context = (
+            "Password Reset: Users can reset their "
+            "password using the self-service portal."
         )
 
-        sample_context = (
-            "Users can reset their password "
-            "using the self-service password "
-            "reset portal available on the "
-            "company intranet."
+        question = (
+            "How do I reset my password?"
         )
 
-        answer = engine.ask(
-            question=sample_question,
-            context=sample_context,
+        answer = llm.ask(
+            question=question,
+            context=context,
         )
 
         logger.info("=" * 60)
         logger.info("Question")
-        logger.info(sample_question)
-
-        logger.info("=" * 60)
-        logger.info("Context")
-        logger.info(sample_context)
+        logger.info(question)
 
         logger.info("=" * 60)
         logger.info("Answer")
@@ -351,8 +280,16 @@ if __name__ == "__main__":
 
         logger.info("=" * 60)
         logger.info("Model Information")
+
         logger.info(
-            engine.get_model_info()
+            llm.get_model_info()
+        )
+
+        logger.info("=" * 60)
+        logger.info("Health Check")
+
+        logger.info(
+            llm.health_check()
         )
 
         logger.info("=" * 60)
@@ -361,10 +298,10 @@ if __name__ == "__main__":
         )
         logger.info("=" * 60)
 
-    except Exception:
+    except Exception as error:
 
         logger.exception(
-            "LLM Engine execution failed."
+            "LLM execution failed."
         )
 
-        raise
+        raise error
