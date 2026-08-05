@@ -7,19 +7,24 @@ llm.py
 Author : Pramod Prakash Jadhav
 ==========================================================
 
-LLM Engine using Ollama.
+Production-ready LLM Engine using Ollama.
 """
 
 import requests
 
+from src.logger import get_logger
 from src.config import (
     OLLAMA_BASE_URL,
     OLLAMA_MODEL,
+    REQUEST_TIMEOUT,
+    SYSTEM_PROMPT,
+    USER_PROMPT_TEMPLATE,
     TEMPERATURE,
+    TOP_P,
+    TOP_K,
     MAX_TOKENS,
+    REPEAT_PENALTY,
 )
-
-from src.logger import get_logger
 
 logger = get_logger()
 
@@ -35,194 +40,106 @@ class LLMEngine:
         """
 
         logger.info("=" * 60)
-        logger.info("Initializing Ollama LLM")
+        logger.info("Initializing LLM Engine")
         logger.info("=" * 60)
 
         self.base_url = OLLAMA_BASE_URL
 
         self.model = OLLAMA_MODEL
 
-        self.temperature = TEMPERATURE
+        self.timeout = REQUEST_TIMEOUT
 
-        self.max_tokens = MAX_TOKENS
-
-        self.generate_url = (
-            f"{self.base_url}/api/generate"
-        )
-
-        logger.info(
-            f"Model : {self.model}"
-        )
-
-        logger.info(
-            "LLM initialized successfully."
-        )
+        self.loaded = False
 
     # ======================================================
-    # Check Ollama Server
+    # Load Model
     # ======================================================
 
     def load_model(self):
         """
-        Verify that the Ollama server is reachable.
+        Verify Ollama server and model availability.
+
+        Returns
+        -------
+        bool
         """
+
+        logger.info(
+            "Checking Ollama server..."
+        )
 
         try:
 
             response = requests.get(
-                self.base_url,
-                timeout=5,
+                f"{self.base_url}/api/tags",
+                timeout=self.timeout,
             )
+
+            response.raise_for_status()
+
+            models = response.json().get(
+                "models",
+                []
+            )
+
+            available_models = [
+                model.get("name", "")
+                for model in models
+            ]
+
+            if self.model not in available_models:
+
+                raise RuntimeError(
+                    f"Model '{self.model}' "
+                    "is not available in Ollama."
+                )
+
+            self.loaded = True
 
             logger.info(
-                "Ollama server is reachable."
+                f"Model loaded: {self.model}"
             )
 
-            return response.status_code == 200
+            return True
 
         except Exception as error:
 
             logger.exception(
-                "Unable to connect to Ollama."
+                "Unable to initialize Ollama."
             )
 
-            raise ConnectionError(
-                "Ollama server is not running."
+            raise RuntimeError(
+                f"Unable to connect to Ollama: {error}"
             ) from error
-              # ======================================================
+                # ======================================================
     # Build Prompt
     # ======================================================
 
     def build_prompt(
         self,
         question: str,
-        context: str
-    ):
+        context: str,
+    ) -> str:
         """
-        Build prompt for Ollama.
-        """
+        Build the final prompt for the LLM.
 
-        logger.info(
-            "Building LLM prompt..."
-        )
+        Parameters
+        ----------
+        question : str
+            User question.
 
-        prompt = f"""
-You are an AI Incident Response Assistant.
+        context : str
+            Retrieved context.
 
-Answer ONLY using the information provided in the context.
-
-If the answer is not available in the context,
-reply:
-
-"I could not find the answer in the knowledge base."
-
-Keep the answer concise, professional and factual.
-
-==================================================
-CONTEXT
-==================================================
-
-{context}
-
-==================================================
-QUESTION
-==================================================
-
-{question}
-
-==================================================
-ANSWER
-==================================================
-"""
-
-        return prompt.strip()
-
-    # ======================================================
-    # Generate Response
-    # ======================================================
-
-    def generate_response(
-        self,
-        prompt: str
-    ):
-        """
-        Generate response using Ollama.
+        Returns
+        -------
+        str
+            Complete prompt.
         """
 
         logger.info(
-            "Generating response..."
+            "Building prompt..."
         )
-
-        payload = {
-
-            "model": self.model,
-
-            "prompt": prompt,
-
-            "stream": False,
-
-            "options": {
-
-                "temperature": self.temperature,
-
-                "num_predict": self.max_tokens
-
-            }
-
-        }
-
-        try:
-
-            response = requests.post(
-
-                self.generate_url,
-
-                json=payload,
-
-                timeout=300
-
-            )
-
-            response.raise_for_status()
-
-            data = response.json()
-
-            answer = data.get(
-                "response",
-                ""
-            ).strip()
-
-            logger.info(
-                "Response generated successfully."
-            )
-
-            return answer
-
-        except requests.exceptions.RequestException as error:
-
-            logger.exception(
-                "LLM request failed."
-            )
-
-            raise RuntimeError(
-                "Failed to generate response from Ollama."
-            ) from error
-              # ======================================================
-    # Ask LLM
-    # ======================================================
-
-    def ask(
-        self,
-        question: str,
-        context: str
-    ):
-        """
-        Generate answer using retrieved context.
-        """
-
-        logger.info("=" * 60)
-        logger.info("Processing user query")
-        logger.info("=" * 60)
 
         if not question.strip():
 
@@ -230,42 +147,161 @@ ANSWER
                 "Question cannot be empty."
             )
 
-        prompt = self.build_prompt(
-            question=question,
-            context=context
-        )
+        if context is None:
 
-        answer = self.generate_response(
-            prompt
+            context = ""
+
+        prompt = (
+            SYSTEM_PROMPT.strip()
+            + "\n\n"
+            + USER_PROMPT_TEMPLATE.format(
+                context=context.strip(),
+                question=question.strip(),
+            )
         )
 
         logger.info(
-            "Answer generated successfully."
+            f"Prompt length: {len(prompt)} characters"
         )
 
-        return answer
-
+        return prompt
+            # ======================================================
+    # Ask LLM
     # ======================================================
+
+    def ask(
+        self,
+        question: str,
+        context: str,
+    ) -> str:
+        """
+        Generate an answer using Ollama.
+
+        Parameters
+        ----------
+        question : str
+            User question.
+
+        context : str
+            Retrieved knowledge context.
+
+        Returns
+        -------
+        str
+            Generated answer.
+        """
+
+        if not self.loaded:
+
+            self.load_model()
+
+        prompt = self.build_prompt(
+            question=question,
+            context=context,
+        )
+
+        payload = {
+            "model": self.model,
+            "prompt": prompt,
+            "stream": False,
+            "options": {
+                "temperature": TEMPERATURE,
+                "top_p": TOP_P,
+                "top_k": TOP_K,
+                "num_predict": MAX_TOKENS,
+                "repeat_penalty": REPEAT_PENALTY,
+            },
+        }
+
+        logger.info("=" * 60)
+        logger.info("Sending request to Ollama")
+        logger.info("=" * 60)
+
+        try:
+
+            response = requests.post(
+                f"{self.base_url}/api/generate",
+                json=payload,
+                timeout=self.timeout,
+            )
+
+            response.raise_for_status()
+
+            result = response.json()
+
+            answer = result.get(
+                "response",
+                "",
+            ).strip()
+
+            if not answer:
+
+                logger.warning(
+                    "LLM returned an empty response."
+                )
+
+                return (
+                    "The language model returned "
+                    "an empty response."
+                )
+
+            logger.info(
+                "LLM response generated successfully."
+            )
+
+            return answer
+
+        except requests.Timeout:
+
+            logger.exception(
+                "Ollama request timed out."
+            )
+
+            return (
+                "The request to the language model "
+                "timed out."
+            )
+
+        except requests.RequestException as error:
+
+            logger.exception(
+                "Failed to communicate with Ollama."
+            )
+
+            return (
+                "Unable to communicate with the "
+                f"language model: {error}"
+            )
+
+        except Exception as error:
+
+            logger.exception(
+                "Unexpected error during inference."
+            )
+
+            return (
+                "An unexpected error occurred while "
+                f"generating the response: {error}"
+    )
+                # ======================================================
     # Model Information
     # ======================================================
 
     def get_model_info(self):
         """
-        Return LLM configuration.
+        Return information about the configured LLM.
+
+        Returns
+        -------
+        dict
         """
 
         return {
-
             "provider": "Ollama",
-
             "model": self.model,
-
             "base_url": self.base_url,
-
-            "temperature": self.temperature,
-
-            "max_tokens": self.max_tokens,
-
+            "timeout": self.timeout,
+            "loaded": self.loaded,
         }
 
 
@@ -276,7 +312,7 @@ ANSWER
 if __name__ == "__main__":
 
     logger.info("=" * 60)
-    logger.info("LLM Demonstration")
+    logger.info("LLM Engine Demonstration")
     logger.info("=" * 60)
 
     try:
@@ -285,46 +321,36 @@ if __name__ == "__main__":
 
         engine.load_model()
 
-        sample_context = """
-Password Reset:
-
-Users can reset their password using
-the company self-service portal.
-
-VPN Access:
-
-VPN requires Multi-Factor Authentication.
-
-Incident Severity:
-
-P1 incidents must be escalated immediately.
-"""
-
         sample_question = (
             "How can I reset my password?"
         )
 
+        sample_context = (
+            "Users can reset their password "
+            "using the self-service password "
+            "reset portal available on the "
+            "company intranet."
+        )
+
         answer = engine.ask(
-
             question=sample_question,
-
-            context=sample_context
-
+            context=sample_context,
         )
 
         logger.info("=" * 60)
         logger.info("Question")
-
         logger.info(sample_question)
 
         logger.info("=" * 60)
-        logger.info("Answer")
+        logger.info("Context")
+        logger.info(sample_context)
 
+        logger.info("=" * 60)
+        logger.info("Answer")
         logger.info(answer)
 
         logger.info("=" * 60)
         logger.info("Model Information")
-
         logger.info(
             engine.get_model_info()
         )
@@ -335,10 +361,10 @@ P1 incidents must be escalated immediately.
         )
         logger.info("=" * 60)
 
-    except Exception as error:
+    except Exception:
 
         logger.exception(
-            "LLM execution failed."
+            "LLM Engine execution failed."
         )
 
-        raise error
+        raise
