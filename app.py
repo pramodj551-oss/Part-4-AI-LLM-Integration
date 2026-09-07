@@ -9,6 +9,7 @@ from src.config import (
     PAGE_ICON,
     PAGE_TITLE,
 )
+from src.conversation_memory import ConversationMemory
 from src.logger import get_logger
 from src.rag_pipeline import RAGPipeline
 from src.runtime import readiness_status, safe_user_error
@@ -53,6 +54,8 @@ st.sidebar.markdown("---")
 
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
+if "conversation_memory" not in st.session_state:
+    st.session_state.conversation_memory = ConversationMemory()
 
 try:
     pipeline = load_pipeline()
@@ -83,6 +86,7 @@ with col2:
 
 if clear_button:
     st.session_state.chat_history = []
+    st.session_state.conversation_memory.clear()
     st.rerun()
 
 if ask_button:
@@ -91,8 +95,15 @@ if ask_button:
     else:
         with st.spinner("Searching knowledge base..."):
             try:
-                result = pipeline.ask(question=question)
+                history = st.session_state.conversation_memory.format_for_prompt()
+                result = pipeline.ask(
+                    question=question,
+                    conversation_history=history,
+                )
                 st.session_state.chat_history.append(result)
+                st.session_state.conversation_memory.add(
+                    result["question"], result["answer"]
+                )
             except Exception:
                 logger.exception("RAG execution failed")
                 st.error(safe_user_error("Unable to process the request. Please try again."))
@@ -117,6 +128,7 @@ if st.session_state.chat_history:
 
         st.markdown("---")
 
+st.sidebar.caption(f"Memory: {len(st.session_state.conversation_memory)}/5 turns")
 st.sidebar.caption("Incident Knowledge Assistant")
 st.sidebar.caption("AI/LLM Integration - Part 4")
 st.sidebar.caption("Developed by Pramod Prakash Jadhav")
