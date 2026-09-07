@@ -1,5 +1,3 @@
-import os
-
 import pytest
 
 from src.p9_resilience import CircuitBreaker, RequestMetrics, timed_request
@@ -42,7 +40,8 @@ def test_api_readiness_is_safe_without_secret(monkeypatch):
 
 
 def test_dockerfile_uses_non_root_user_and_healthcheck():
-    dockerfile = open("Dockerfile", encoding="utf-8").read()
+    with open("Dockerfile", encoding="utf-8") as handle:
+        dockerfile = handle.read()
     assert "USER appuser" in dockerfile
     assert "HEALTHCHECK" in dockerfile
-    assert "--host", "0.0.0.0" in dockerfile
+    assert '"--host", "0.0.0.0"' in dockerfile
