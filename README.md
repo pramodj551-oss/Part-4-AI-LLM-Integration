@@ -24,6 +24,20 @@ Streamlit UI
 
 Retrieved documents are the authoritative source for answers. Previous conversation is session-scoped, bounded, and treated only as untrusted reference material for conversational follow-ups.
 
+## P6 — Session Document Upload
+
+P6 adds a secure, ephemeral upload path for **TXT, MD and CSV** documents:
+
+- Maximum 5 uploaded files per indexing operation.
+- Maximum 1 MB per file.
+- UTF-8 validation and bounded text extraction.
+- Uploaded documents are indexed only in the current Streamlit session.
+- The persistent FAISS index and `vector_store/documents.json` are never modified by UI uploads.
+- Uploaded content is not written to application telemetry.
+- Removing uploaded documents returns retrieval to the persistent knowledge base.
+
+This design avoids cross-session mutation of the shared cached production pipeline and keeps user-uploaded knowledge isolated.
+
 ## Technology Stack
 
 | Category | Technology |
@@ -40,57 +54,12 @@ Retrieved documents are the authoritative source for answers. Previous conversat
 
 ## Conversation Memory
 
-P5 adds `src/conversation_memory.py` with a bounded, in-memory conversation store:
-
-- Maximum 5 turns per Streamlit session by default.
-- Individual question/answer fields are bounded to 2,000 characters.
-- Memory is stored in `st.session_state`; it is not persisted to disk or telemetry.
-- `Clear Chat` clears both the displayed history and the memory used for follow-up prompts.
-- Previous conversation is explicitly marked untrusted and cannot override system instructions or retrieved knowledge-base context.
-- No conversation content is written to application logs by the memory component.
-
-## Project Structure
-
-```text
-.
-├── app.py
-├── requirements.txt
-├── README.md
-├── data/
-│   └── incidents.csv
-├── vector_store/
-│   ├── faiss.index
-│   └── documents.json
-├── pages/
-├── src/
-│   ├── config.py
-│   ├── conversation_memory.py
-│   ├── logger.py
-│   ├── data_loader.py
-│   ├── embeddings.py
-│   ├── vector_store.py
-│   ├── retriever.py
-│   ├── evaluation.py
-│   ├── observability.py
-│   └── llm.py
-└── tests/
-    ├── test_p0_hardening.py
-    ├── test_p1_security.py
-    ├── test_p2_evaluation_observability.py
-    ├── test_p3_llm_resilience.py
-    ├── test_p4_runtime.py
-    └── test_p5_conversation_memory.py
-```
+P5 adds bounded, in-memory conversation context for Streamlit sessions. Maximum 5 turns are retained by default, individual question/answer fields are bounded to 2,000 characters, and previous conversation is explicitly treated as untrusted reference material.
 
 ## Installation
 
 ```bash
 python -m venv .venv
-```
-
-Activate the environment, then:
-
-```bash
 pip install -r requirements.txt
 ```
 
@@ -98,31 +67,7 @@ The LLM integration requires a `GROQ_API_KEY` configured through Streamlit Secre
 
 ## Knowledge Base
 
-The application expects the incident dataset at:
-
-```text
-data/incidents.csv
-```
-
-The persisted document store is JSON (`vector_store/documents.json`). It contains only document strings and is intentionally not loaded with Python pickle deserialization.
-
-Build or synchronize the FAISS index and JSON document store before using the application.
-
-## RAG Evaluation
-
-P2 adds deterministic, provider-independent evaluation helpers in `src/evaluation.py`:
-
-- Hit Rate@K
-- Precision@K
-- Recall@K
-- Mean Reciprocal Rank (MRR)
-- Lexical grounding score for answer/context support
-
-These metrics operate on retrieval results and do not require a live Groq call, making regression tests deterministic and CI-safe.
-
-## Observability
-
-`src/observability.py` provides privacy-safe in-process telemetry for retrieval and generation. Counters cover retrieval volume, empty retrievals, retrieved document volume, generation errors, and grounding outcomes. Query content is never stored; retrieval logs use a short SHA-256 fingerprint.
+The application expects the incident dataset at `data/incidents.csv`. The persisted document store is JSON (`vector_store/documents.json`) and is intentionally not loaded with Python pickle deserialization. Build or synchronize the FAISS index and JSON document store before using the application.
 
 ## Run
 
@@ -136,22 +81,22 @@ streamlit run app.py
 pytest -q
 ```
 
-P0–P5 regression tests cover configuration consistency, safe vector-store persistence, input/security validation, retrieval evaluation metrics, grounding behavior, privacy-safe telemetry, LLM resilience, runtime readiness, and bounded session conversation memory.
+P0–P6 regression tests cover configuration consistency, safe persistence, input/security validation, retrieval evaluation, privacy-safe telemetry, LLM resilience, runtime readiness, conversation memory, and bounded document upload parsing.
 
 ## Security Notes
 
 - Secrets are supplied through Streamlit Secrets rather than source code.
 - The document store uses JSON instead of executable Python pickle deserialization.
-- Vector-store loading validates that the FAISS vector count matches the JSON document count.
-- User-controlled document types are validated before indexing.
+- Vector-store loading validates that FAISS and JSON document counts match.
 - Query content is excluded from telemetry logs; only a non-reversible fingerprint is recorded.
-- Conversation memory is session-scoped, bounded, non-persistent, and treated as untrusted reference material.
+- Conversation memory is session-scoped, bounded, non-persistent, and untrusted.
+- UI uploads are size/type/encoding validated and remain ephemeral to the active session.
 - This repository is a prototype and should not be described as production-ready without additional authentication, authorization, rate limiting, deployment hardening, and security testing.
 
 ## Project Status
 
-**Current version:** 1.1.0  
-**Status:** RAG prototype under security, correctness, evaluation, observability, resilience, and session-memory hardening  
+**Current version:** 1.2.0  
+**Status:** RAG prototype under security, correctness, evaluation, observability, resilience, session-memory, and document-ingestion hardening  
 **LLM provider:** Groq  
 **Vector search:** FAISS
 
