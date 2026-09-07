@@ -15,6 +15,7 @@ from src.config import (
     TEMPERATURE,
     TOP_P,
 )
+from src.guardrails import apply_answer_guardrail
 from src.llm_resilience import sleep_before_retry, validate_llm_response
 from src.logger import get_logger
 from src.security import contains_prompt_override, query_fingerprint, validate_context, validate_query
@@ -98,8 +99,11 @@ class LLMEngine:
                     max_completion_tokens=MAX_TOKENS,
                 )
                 answer = validate_llm_response(response, MAX_RESPONSE_LENGTH)
+                safe_answer = apply_answer_guardrail(answer)
+                if safe_answer != answer:
+                    logger.warning("LLM output guardrail replaced unsafe response query=%s", fingerprint)
                 logger.info("Response generated successfully query=%s attempt=%d", fingerprint, attempt + 1)
-                return answer
+                return safe_answer
             except Exception as exc:
                 last_error = exc
                 if attempt >= LLM_MAX_RETRIES:

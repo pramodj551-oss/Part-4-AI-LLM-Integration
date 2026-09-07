@@ -6,6 +6,23 @@ The format follows the principles of Keep a Changelog and uses Semantic Versioni
 
 ---
 
+## [1.3.0] - 2026-09-07
+
+### Added
+
+- P7 deterministic retrieval relevance guardrail using a configurable FAISS L2 distance threshold.
+- Generated-answer validation with bounded output length and stable empty-response fallback.
+- Output disclosure guardrail for common system-prompt, developer-instruction, and secret patterns.
+- Deterministic P7 regression tests for relevance filtering and output safety.
+
+### Security
+
+- Low-relevance retrieval results are excluded before prompt construction.
+- Model output that appears to disclose internal instructions or secrets is replaced with a safe refusal.
+- Prompt-override telemetry continues to use non-reversible query fingerprints rather than raw query text.
+
+---
+
 ## [1.2.0] - 2026-09-07
 
 ### Added
