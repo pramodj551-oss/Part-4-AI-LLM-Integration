@@ -17,9 +17,16 @@ def test_config_uses_groq_and_has_no_stale_ollama_settings():
 
 
 def test_config_execution_imports_cleanly():
-    namespace = {}
-    exec(compile(config.__loader__.get_source(config.__name__), str(config.__file__), "exec"), namespace)
+    source = config.__loader__.get_source(config.__name__)
+    namespace = {
+        "__name__": config.__name__,
+        "__file__": str(config.__file__),
+        "__package__": config.__package__,
+    }
+    exec(compile(source, str(config.__file__), "exec"), namespace)
     assert namespace["GROQ_MODEL"] == config.GROQ_MODEL
+    assert namespace["DATASET_PATH"].name == "incidents.csv"
+    assert namespace["DOCUMENTS_PATH"].name == "documents.json"
 
 
 def test_vector_store_round_trip_uses_json(tmp_path, monkeypatch):
