@@ -49,9 +49,6 @@ Retrieved documents are supplied as context to the LLM. The application instruct
 │   ├── faiss.index
 │   └── documents.json
 ├── pages/
-│   ├── Incident_Search.py
-│   ├── Knowledge_Base.py
-│   └── Analytics.py
 ├── src/
 │   ├── config.py
 │   ├── logger.py
@@ -59,9 +56,13 @@ Retrieved documents are supplied as context to the LLM. The application instruct
 │   ├── embeddings.py
 │   ├── vector_store.py
 │   ├── retriever.py
+│   ├── evaluation.py
+│   ├── observability.py
 │   └── llm.py
 └── tests/
-    └── test_p0_hardening.py
+    ├── test_p0_hardening.py
+    ├── test_p1_security.py
+    └── test_p2_evaluation_observability.py
 ```
 
 ## Installation
@@ -90,6 +91,22 @@ The persisted document store is JSON (`vector_store/documents.json`). It contain
 
 Build or synchronize the FAISS index and JSON document store before using the application.
 
+## RAG Evaluation
+
+P2 adds deterministic, provider-independent evaluation helpers in `src/evaluation.py`:
+
+- Hit Rate@K
+- Precision@K
+- Recall@K
+- Mean Reciprocal Rank (MRR)
+- Lexical grounding score for answer/context support
+
+These metrics operate on retrieval results and do not require a live Groq call, making regression tests deterministic and CI-safe.
+
+## Observability
+
+`src/observability.py` provides privacy-safe in-process telemetry for retrieval and generation. Counters cover retrieval volume, empty retrievals, retrieved document volume, generation errors, and grounding outcomes. Query content is never stored; retrieval logs use a short SHA-256 fingerprint.
+
 ## Run
 
 ```bash
@@ -102,7 +119,7 @@ streamlit run app.py
 pytest -q
 ```
 
-The P0 tests verify configuration consistency and safe JSON vector-store persistence, including index/document count validation and document type validation.
+P0/P1/P2 regression tests cover configuration consistency, safe vector-store persistence, input/security validation, retrieval evaluation metrics, grounding behavior, and privacy-safe telemetry.
 
 ## Security Notes
 
@@ -110,12 +127,13 @@ The P0 tests verify configuration consistency and safe JSON vector-store persist
 - The document store uses JSON instead of executable Python pickle deserialization.
 - Vector-store loading validates that the FAISS vector count matches the JSON document count.
 - User-controlled document types are validated before indexing.
-- This repository is a prototype and should not be described as production-ready without additional authentication, authorization, rate limiting, RAG evaluation, deployment hardening, and security testing.
+- Query content is excluded from telemetry logs; only a non-reversible fingerprint is recorded.
+- This repository is a prototype and should not be described as production-ready without additional authentication, authorization, rate limiting, deployment hardening, and security testing.
 
 ## Project Status
 
 **Current version:** 1.0.1  
-**Status:** RAG prototype under security and correctness hardening  
+**Status:** RAG prototype under security, correctness, evaluation, and observability hardening  
 **LLM provider:** Groq  
 **Vector search:** FAISS
 
