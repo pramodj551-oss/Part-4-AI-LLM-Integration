@@ -1,7 +1,7 @@
 """Production semantic retriever with safe session document support."""
 from pathlib import Path
 from sentence_transformers import SentenceTransformer
-from src.config import EMBEDDING_MODEL, TOP_K_RESULTS, FAISS_INDEX_PATH, DOCUMENTS_PATH
+from src.config import EMBEDDING_MODEL, TOP_K_RESULTS, FAISS_INDEX_PATH, DOCUMENTS_PATH, MAX_RETRIEVAL_DISTANCE
 from src.data_loader import DataLoader
 from src.embeddings import generate_embeddings
 from src.logger import get_logger
@@ -11,7 +11,7 @@ from src.vector_store import VectorStore
 logger = get_logger()
 
 class Retriever:
-    """Semantic retriever with bounded user-controlled parameters."""
+    """Semantic retriever with bounded user-controlled parameters and relevance gating."""
     def __init__(self, documents=None):
         logger.info("Initializing Retriever")
         self.embedder = SentenceTransformer(EMBEDDING_MODEL)
@@ -54,12 +54,16 @@ class Retriever:
         top_k = validate_top_k(top_k)
         logger.info("Starting retrieval fingerprint=%s top_k=%d", query_fingerprint(query), top_k)
         results = self.vector_store.similarity_search(query_embedding=self.embed_query(query), top_k=top_k)
-        logger.info("Retrieved %d documents.", len(results))
-        return results
+        relevant = [item for item in results if item.get("distance", float("inf")) <= MAX_RETRIEVAL_DISTANCE]
+        rejected = len(results) - len(relevant)
+        if rejected:
+            logger.info("Relevance guardrail rejected %d low-relevance results.", rejected)
+        logger.info("Retrieved %d relevant documents.", len(relevant))
+        return relevant
 
     def build_context(self, retrieved_documents):
         if not retrieved_documents:
-            logger.warning("No documents retrieved.")
+            logger.warning("No relevant documents retrieved.")
             return ""
         context_parts, total_length = [], 0
         for item in retrieved_documents:
@@ -83,5 +87,5 @@ class Retriever:
 
     def get_retrieval_info(self):
         info = self.vector_store.get_index_info()
-        info.update({"embedding_model": EMBEDDING_MODEL, "default_top_k": TOP_K_RESULTS})
+        info.update({"embedding_model": EMBEDDING_MODEL, "default_top_k": TOP_K_RESULTS, "max_retrieval_distance": MAX_RETRIEVAL_DISTANCE})
         return info
