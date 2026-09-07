@@ -6,6 +6,32 @@ The format follows the principles of Keep a Changelog and uses Semantic Versioni
 
 ---
 
+## [1.4.0] - 2026-09-07
+
+### Added
+
+- P8 authenticated FastAPI facade for RAG queries.
+- API-key authentication with user and admin roles.
+- Constant-time credential comparison and non-reversible credential fingerprints for audit telemetry.
+- Process-local request rate limiting with configurable request/window settings.
+- Request validation and bounded query, top-k and conversation-history inputs.
+- Stable HTTP errors without internal exception or credential disclosure.
+- Public health endpoint plus authenticated service and admin information endpoints.
+- Deterministic P8 security regression tests.
+
+### Security
+
+- API credentials are read from environment configuration and never embedded in source code.
+- Raw questions and API keys are excluded from API audit logs.
+- Admin-only endpoint rejects standard user credentials.
+- Excessive requests return HTTP 429 without exposing internal state.
+
+### Note
+
+- The built-in rate limiter is process-local and intended for a single API worker. A distributed deployment should use a shared limiter such as Redis.
+
+---
+
 ## [1.3.0] - 2026-09-07
 
 ### Added
