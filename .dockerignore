@@ -1,0 +1,11 @@
+.git
+.github
+__pycache__
+.pytest_cache
+.venv
+.env
+.env.*
+*.pyc
+outputs/logs
+outputs/chat_history.json
+*.ipynb_checkpoints

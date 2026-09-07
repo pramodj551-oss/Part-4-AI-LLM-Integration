@@ -28,15 +28,46 @@ Prompt-Grounded Groq LLM
 Output Safety Guardrail
     ↓
 Secure API Response / Streamlit UI
+    ↓
+Operational Metrics / Health Probes
 ```
 
 Retrieved documents are the authoritative source for answers. Previous conversation is session-scoped, bounded, and treated only as untrusted reference material for conversational follow-ups.
+
+## P9 — Production Deployment & Operational Resilience
+
+P9 adds deployment and runtime safeguards for the FastAPI service:
+
+- Hardened Python 3.11 slim container with a dedicated non-root `appuser`.
+- Docker `HEALTHCHECK` probes the public `/health` endpoint.
+- `/ready` provides a stable readiness response and returns HTTP 503 when required deployment configuration is absent.
+- `/metrics` exposes process-local request count, error count and average latency without request payloads.
+- Thread-safe request metrics cover completed API calls and failures.
+- A deterministic circuit-breaker primitive supports bounded downstream-failure handling and recovery.
+- `.dockerignore` excludes Git metadata, virtual environments, environment files and runtime logs from the build context.
+- Runtime configuration continues to come from deployment environment/secrets; no API credentials are stored in source.
+
+The metrics and circuit breaker are intentionally process-local. Multi-worker or distributed deployments should use shared observability and coordination infrastructure where required.
+
+### Production API Container
+
+```bash
+docker build -t incident-knowledge-assistant:1.5.0 .
+docker run --rm -p 8000:8000 \
+  -e P8_API_KEY='<configured-key>' \
+  -e GROQ_API_KEY='<configured-groq-key>' \
+  incident-knowledge-assistant:1.5.0
+```
+
+Never commit real credentials or `.env` files. Use the deployment platform's secret manager/environment configuration.
 
 ## P8 — Secure API & Access Control
 
 P8 adds an authenticated FastAPI facade for controlled programmatic access to the RAG pipeline:
 
 - `GET /health` is a minimal public health endpoint.
+- `GET /ready` is a deployment readiness probe.
+- `GET /metrics` returns privacy-safe process-local operational counters.
 - `GET /v1/info` requires a valid `X-API-Key` credential.
 - `GET /v1/admin/info` requires the admin credential.
 - `POST /v1/query` requires authentication, validates question/top-k/history bounds, and returns a request ID.
@@ -47,21 +78,6 @@ P8 adds an authenticated FastAPI facade for controlled programmatic access to th
 - Authentication, authorization, validation, rate-limit and server errors use stable responses without internal exception details.
 
 The built-in rate limiter is intentionally process-local. Distributed deployments should use a shared rate-limit store such as Redis.
-
-### API Run
-
-```bash
-uvicorn api:app --host 0.0.0.0 --port 8000
-```
-
-Example authenticated request:
-
-```bash
-curl -X POST http://localhost:8000/v1/query \
-  -H 'Content-Type: application/json' \
-  -H 'X-API-Key: <configured-key>' \
-  -d '{"question":"What happened in the incident?","top_k":5}'
-```
 
 ## P7 — RAG Quality & Guardrails
 
@@ -112,7 +128,7 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-The LLM integration requires a `GROQ_API_KEY` configured through Streamlit Secrets. **Do not commit API keys or `.env` files containing secrets.**
+The LLM integration requires a `GROQ_API_KEY` configured through Streamlit Secrets or deployment secrets. **Do not commit API keys or `.env` files containing secrets.**
 
 For the API, configure `P8_API_KEY` and optionally `P8_ADMIN_API_KEY` as deployment secrets.
 
@@ -138,7 +154,7 @@ uvicorn api:app --host 0.0.0.0 --port 8000
 pytest -q
 ```
 
-P0–P8 regression tests cover configuration consistency, safe persistence, input/security validation, retrieval evaluation, privacy-safe telemetry, LLM resilience, runtime readiness, conversation memory, bounded document upload parsing, relevance filtering, generated-output safety, API authentication, authorization, rate limiting, and secure error handling.
+P0–P9 regression tests cover configuration consistency, safe persistence, input/security validation, retrieval evaluation, privacy-safe telemetry, LLM resilience, runtime readiness, conversation memory, bounded document upload parsing, relevance filtering, generated-output safety, API authentication, authorization, rate limiting, secure error handling, deployment health probes, metrics and circuit-breaker behavior.
 
 ## Security Notes
 
@@ -152,11 +168,12 @@ P0–P8 regression tests cover configuration consistency, safe persistence, inpu
 - API authentication uses constant-time API-key comparison and role-based endpoint authorization.
 - API rate limiting is process-local and should be replaced with shared infrastructure for multi-worker deployments.
 - API logs contain no raw questions or API credentials.
+- Production containers run as a non-root user and exclude local secrets/runtime logs from the Docker build context.
 
 ## Project Status
 
-**Current version:** 1.4.0  
-**Status:** RAG prototype under security, correctness, evaluation, observability, resilience, session-memory, document-ingestion, quality-guardrail, and API-access hardening  
+**Current version:** 1.5.0  
+**Status:** RAG prototype under security, correctness, evaluation, observability, resilience, session-memory, document-ingestion, quality-guardrail, API-access, and production-deployment hardening  
 **LLM provider:** Groq  
 **Vector search:** FAISS
 

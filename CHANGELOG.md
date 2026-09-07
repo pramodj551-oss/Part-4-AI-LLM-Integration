@@ -6,6 +6,29 @@ The format follows the principles of Keep a Changelog and uses Semantic Versioni
 
 ---
 
+## [1.5.0] - 2026-09-07
+
+### Added
+
+- Hardened production API container using Python 3.11 slim image and a dedicated non-root runtime user.
+- Container healthcheck for the public API health endpoint.
+- Explicit readiness endpoint with stable HTTP 503 behavior when required deployment configuration is absent.
+- Thread-safe process-local request metrics for completed requests, errors and average latency.
+- Deterministic circuit-breaker primitive for repeated downstream failures with bounded recovery behavior.
+- P9 regression tests for metrics, circuit-breaker recovery, readiness failure handling and container hardening.
+
+### Security
+
+- `.dockerignore` excludes Git metadata, virtual environments, environment files and runtime logs from the container build context.
+- API authentication and error responses remain privacy-safe and do not expose credentials or internal exception details.
+- Production container runs as a dedicated unprivileged user.
+
+### Operations
+
+- The process-local metrics and circuit breaker are intended for a single worker. Multi-worker or distributed deployments should use shared infrastructure where coordination is required.
+
+---
+
 ## [1.4.0] - 2026-09-07
 
 ### Added
