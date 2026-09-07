@@ -30,23 +30,31 @@ class RAGPipeline:
             top_k=validate_top_k(top_k),
         )
 
-    def generate_answer(self, question: str, context: str):
+    def generate_answer(self, question: str, context: str, conversation_history=None):
         question = validate_query(question)
         if not isinstance(context, str) or not context.strip():
             return "I could not find any relevant information in the knowledge base."
         context = validate_context(context)
         try:
-            answer = self.llm.ask(question=question, context=context)
+            answer = self.llm.ask(
+                question=question,
+                context=context,
+                conversation_history=conversation_history,
+            )
             return answer or "The language model did not return a response."
         except Exception:
             logger.exception("LLM generation failed.")
             return "An error occurred while generating the answer."
 
-    def ask(self, question: str, top_k=None):
+    def ask(self, question: str, top_k=None, conversation_history=None):
         question = validate_query(question)
         retrieval_result = self.retrieve(question=question, top_k=top_k)
         context = retrieval_result.get("context", "")
-        answer = self.generate_answer(question=question, context=context)
+        answer = self.generate_answer(
+            question=question,
+            context=context,
+            conversation_history=conversation_history,
+        )
         return {
             "question": question,
             "answer": answer,
