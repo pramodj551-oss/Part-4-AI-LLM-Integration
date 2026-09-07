@@ -24,10 +24,10 @@ def safe_user_error(message: str = "The request could not be completed.") -> str
     return message
 
 
-def readiness_status(pipeline) -> RuntimeStatus:
+def readiness_status(pipeline, version: str) -> RuntimeStatus:
     """Report readiness without returning credentials or internal exceptions."""
     try:
         pipeline.health_check()
     except Exception:
-        return RuntimeStatus("not_ready", "rag_pipeline", "unknown")
-    return RuntimeStatus("ready", "rag_pipeline", "unknown")
+        return RuntimeStatus("not_ready", "rag_pipeline", version)
+    return RuntimeStatus("ready", "rag_pipeline", version)
