@@ -15,12 +15,14 @@ FAISS Similarity Search
     ↓
 Retrieved Incident Context
     ↓
+Bounded Session Conversation Memory
+    ↓
 Prompt-Grounded Groq LLM
     ↓
 Streamlit UI
 ```
 
-Retrieved documents are supplied as context to the LLM. The application instructs the model to avoid answers that are not supported by the supplied context.
+Retrieved documents are the authoritative source for answers. Previous conversation is session-scoped, bounded, and treated only as untrusted reference material for conversational follow-ups.
 
 ## Technology Stack
 
@@ -35,6 +37,17 @@ Retrieved documents are supplied as context to the LLM. The application instruct
 | Data | Pandas / NumPy |
 | Visualization | Plotly |
 | Testing | pytest |
+
+## Conversation Memory
+
+P5 adds `src/conversation_memory.py` with a bounded, in-memory conversation store:
+
+- Maximum 5 turns per Streamlit session by default.
+- Individual question/answer fields are bounded to 2,000 characters.
+- Memory is stored in `st.session_state`; it is not persisted to disk or telemetry.
+- `Clear Chat` clears both the displayed history and the memory used for follow-up prompts.
+- Previous conversation is explicitly marked untrusted and cannot override system instructions or retrieved knowledge-base context.
+- No conversation content is written to application logs by the memory component.
 
 ## Project Structure
 
@@ -51,6 +64,7 @@ Retrieved documents are supplied as context to the LLM. The application instruct
 ├── pages/
 ├── src/
 │   ├── config.py
+│   ├── conversation_memory.py
 │   ├── logger.py
 │   ├── data_loader.py
 │   ├── embeddings.py
@@ -62,7 +76,10 @@ Retrieved documents are supplied as context to the LLM. The application instruct
 └── tests/
     ├── test_p0_hardening.py
     ├── test_p1_security.py
-    └── test_p2_evaluation_observability.py
+    ├── test_p2_evaluation_observability.py
+    ├── test_p3_llm_resilience.py
+    ├── test_p4_runtime.py
+    └── test_p5_conversation_memory.py
 ```
 
 ## Installation
@@ -119,7 +136,7 @@ streamlit run app.py
 pytest -q
 ```
 
-P0/P1/P2 regression tests cover configuration consistency, safe vector-store persistence, input/security validation, retrieval evaluation metrics, grounding behavior, and privacy-safe telemetry.
+P0–P5 regression tests cover configuration consistency, safe vector-store persistence, input/security validation, retrieval evaluation metrics, grounding behavior, privacy-safe telemetry, LLM resilience, runtime readiness, and bounded session conversation memory.
 
 ## Security Notes
 
@@ -128,12 +145,13 @@ P0/P1/P2 regression tests cover configuration consistency, safe vector-store per
 - Vector-store loading validates that the FAISS vector count matches the JSON document count.
 - User-controlled document types are validated before indexing.
 - Query content is excluded from telemetry logs; only a non-reversible fingerprint is recorded.
+- Conversation memory is session-scoped, bounded, non-persistent, and treated as untrusted reference material.
 - This repository is a prototype and should not be described as production-ready without additional authentication, authorization, rate limiting, deployment hardening, and security testing.
 
 ## Project Status
 
-**Current version:** 1.0.1  
-**Status:** RAG prototype under security, correctness, evaluation, and observability hardening  
+**Current version:** 1.1.0  
+**Status:** RAG prototype under security, correctness, evaluation, observability, resilience, and session-memory hardening  
 **LLM provider:** Groq  
 **Vector search:** FAISS
 

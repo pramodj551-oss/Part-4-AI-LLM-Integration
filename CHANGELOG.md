@@ -1,4 +1,4 @@
-Changelog
+# Changelog
 
 All notable changes to this project are documented in this file.
 
@@ -6,114 +6,40 @@ The format follows the principles of Keep a Changelog and uses Semantic Versioni
 
 ---
 
-[1.0.0] - 2026-08-01
+## [1.1.0] - 2026-09-07
 
-Added
+### Added
 
-Project Setup
+- Bounded, session-scoped conversation memory for Streamlit.
+- Maximum 5 retained conversation turns by default.
+- Per-field memory limits to prevent unbounded prompt growth.
+- Safe prompt integration where prior conversation is explicitly treated as untrusted reference material.
+- Clear Chat now resets both visible history and conversation memory.
+- Deterministic P5 regression tests for bounds, truncation, ordering, clearing, and validation.
 
-- Initial project structure
-- Production-ready configuration
-- Logging support
-- GitHub-ready repository structure
-- MIT License
-- Requirements file
-- Git ignore configuration
+### Security
 
-Core Modules
-
-- Dataset loader
-- SentenceTransformer embedding generator
-- FAISS vector database
-- Semantic document retriever
-- Ollama LLM integration
-- RAG chatbot orchestration
-
-Streamlit Application
-
-- Home page
-- Incident Search page
-- Knowledge Base page
-- Analytics page
-
-Artificial Intelligence Features
-
-- Retrieval-Augmented Generation (RAG)
-- Semantic Search
-- Context-aware response generation
-- Configurable Top-K retrieval
-- Local LLM inference using Ollama
-
-Analytics
-
-- Dataset statistics
-- Knowledge Base explorer
-- Retrieval metrics
-- Vector Store information
-- Interactive Plotly charts
-
-Logging
-
-- Centralized logging
-- Exception handling
-- Runtime information
-- Retrieval logs
-- LLM request logs
-
-Documentation
-
-- Complete README
-- Installation guide
-- Project architecture
-- Usage examples
-- Troubleshooting guide
+- Conversation memory is not persisted to disk.
+- Conversation memory is not written to telemetry logs.
+- Retrieved knowledge-base context remains authoritative over previous conversation.
+- Previous conversation cannot override system instructions.
 
 ---
 
-Security
+## [1.0.0] - 2026-08-01
 
-- Local execution using Ollama
-- No external API dependency
-- Sensitive configuration isolated
-- Production-ready project layout
+### Added
 
----
+- Initial project structure and Streamlit application.
+- Dataset loader, SentenceTransformer embeddings, FAISS vector database, semantic retriever, Groq LLM integration, and RAG orchestration.
+- Home, Incident Search, Knowledge Base, and Analytics pages.
+- RAG evaluation and privacy-safe observability.
+- Security, resilience, runtime readiness, and regression hardening through P0–P4.
 
-Performance
+### Roadmap
 
-- Fast semantic retrieval using FAISS
-- Efficient SentenceTransformer embeddings
-- Modular architecture for scalability
-
----
-
-Known Limitations
-
-- Single-user Streamlit session
-- Local Ollama server required
-- Initial embedding generation depends on dataset size
-
----
-
-Future Roadmap
-
-Version 1.1
-
-- Conversation memory
-- Document upload from UI
-- Metadata filtering
-
-Version 1.2
-
-- Hybrid Search (FAISS + BM25)
-- Authentication
-- User feedback collection
-
-Version 2.0
-
-- Multi-user support
-- Cloud deployment
-- REST API
-- Docker support
-- Advanced analytics
-- Role-based access control
+- Document upload from UI.
+- Metadata filtering.
+- Hybrid Search (FAISS + BM25).
+- Authentication and user feedback collection.
+- Multi-user support, cloud deployment, REST API, Docker support, advanced analytics, and role-based access control.
