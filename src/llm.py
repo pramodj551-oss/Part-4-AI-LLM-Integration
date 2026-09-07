@@ -1,24 +1,29 @@
-"""Production Groq LLM engine with input and error hardening."""
+"""Production Groq LLM engine with input, resilience and privacy hardening."""
 
 import streamlit as st
 from groq import Groq
 
 from src.config import (
     GROQ_MODEL,
+    LLM_MAX_RETRIES,
+    LLM_RETRY_BASE_DELAY,
+    LLM_RETRY_MAX_DELAY,
+    MAX_TOKENS,
+    MAX_RESPONSE_LENGTH,
     REQUEST_TIMEOUT,
+    SYSTEM_PROMPT,
     TEMPERATURE,
     TOP_P,
-    MAX_TOKENS,
-    SYSTEM_PROMPT,
 )
+from src.llm_resilience import sleep_before_retry, validate_llm_response
 from src.logger import get_logger
-from src.security import validate_context, validate_query
+from src.security import contains_prompt_override, query_fingerprint, validate_context, validate_query
 
 logger = get_logger()
 
 
 class LLMEngine:
-    """Groq-backed LLM engine with safe secret/error handling."""
+    """Groq-backed LLM engine with bounded retries and safe diagnostics."""
 
     def __init__(self):
         self.model = GROQ_MODEL
@@ -32,7 +37,7 @@ class LLMEngine:
             api_key = st.secrets.get("GROQ_API_KEY")
             if not api_key:
                 raise ValueError("GROQ_API_KEY is not configured.")
-            self.client = Groq(api_key=api_key)
+            self.client = Groq(api_key=api_key, timeout=self.timeout)
             self.loaded = True
             logger.info("Groq client initialized successfully.")
             return True
@@ -48,38 +53,58 @@ class LLMEngine:
             "model": self.model,
             "loaded": self.loaded,
             "timeout": self.timeout,
+            "max_tokens": MAX_TOKENS,
+            "max_response_length": MAX_RESPONSE_LENGTH,
+            "max_retries": LLM_MAX_RETRIES,
         }
 
     def ask(self, question: str, context: str):
         """Generate an answer using validated question and retrieved context."""
         question = validate_query(question)
         context = validate_context(context)
+        fingerprint = query_fingerprint(question)
+        if contains_prompt_override(question):
+            logger.warning("Prompt-override pattern detected for query=%s", fingerprint)
 
         if not self.loaded:
             self.load_model()
 
         prompt = f"Context:\n{context}\n\nQuestion:\n{question}\n\nAnswer:\n"
-        logger.info("Sending validated request to Groq.")
+        logger.info("Sending validated request to Groq query=%s", fingerprint)
 
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=TEMPERATURE,
-                top_p=TOP_P,
-                max_completion_tokens=MAX_TOKENS,
-            )
-            answer = response.choices[0].message.content
-            if not isinstance(answer, str) or not answer.strip():
-                raise RuntimeError("Empty model response.")
-            logger.info("Response generated successfully.")
-            return answer.strip()
-        except Exception:
-            logger.exception("Groq request failed.")
-            raise RuntimeError("The language model request could not be completed.") from None
+        last_error = None
+        for attempt in range(LLM_MAX_RETRIES + 1):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=TEMPERATURE,
+                    top_p=TOP_P,
+                    max_completion_tokens=MAX_TOKENS,
+                )
+                answer = validate_llm_response(response, MAX_RESPONSE_LENGTH)
+                logger.info("Response generated successfully query=%s attempt=%d", fingerprint, attempt + 1)
+                return answer
+            except Exception as exc:
+                last_error = exc
+                if attempt >= LLM_MAX_RETRIES:
+                    break
+                logger.warning(
+                    "Groq request failed; retrying query=%s attempt=%d",
+                    fingerprint,
+                    attempt + 1,
+                )
+                sleep_before_retry(
+                    attempt + 1,
+                    LLM_RETRY_BASE_DELAY,
+                    LLM_RETRY_MAX_DELAY,
+                )
+
+        logger.exception("Groq request exhausted retries query=%s", fingerprint, exc_info=last_error)
+        raise RuntimeError("The language model request could not be completed.") from None
 
     def health_check(self):
         return {
