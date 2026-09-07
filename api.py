@@ -1,4 +1,4 @@
-"""P8 authenticated API facade for the production RAG pipeline."""
+"""P9 production API facade with secure access and operational controls."""
 
 import uuid
 
@@ -8,12 +8,14 @@ from pydantic import BaseModel, Field
 from src.api_security import AuthenticationError, AuthorizationError, RateLimiter, authenticate, authorize, credential_fingerprint
 from src.config import APPLICATION_VERSION
 from src.logger import get_logger
+from src.p9_resilience import RequestMetrics, timed_request
 from src.rag_pipeline import RAGPipeline
 from src.security import validate_query, validate_top_k
 
 logger = get_logger()
 app = FastAPI(title="Incident Knowledge Assistant API", version=APPLICATION_VERSION)
 limiter = RateLimiter()
+metrics = RequestMetrics()
 _pipeline = None
 
 
@@ -41,13 +43,34 @@ def require_api_key(x_api_key: str | None = Header(default=None)):
     try:
         role = authenticate(x_api_key or "")
         return role, x_api_key or ""
-    except AuthenticationError as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc), headers={"WWW-Authenticate": "ApiKey"}) from None
+    except AuthenticationError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required.", headers={"WWW-Authenticate": "ApiKey"}) from None
 
 
 @app.get("/health")
 def health():
     return {"status": "healthy", "version": APPLICATION_VERSION}
+
+
+@app.get("/ready")
+def ready():
+    """Liveness/readiness probe that avoids loading the expensive pipeline."""
+    try:
+        required = ("P8_API_KEY",)
+        import os
+        configured = all(bool(os.getenv(name, "").strip()) for name in required)
+        if not configured:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Service is not ready.")
+        return {"status": "ready", "version": APPLICATION_VERSION}
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Service is not ready.") from None
+
+
+@app.get("/metrics")
+def service_metrics():
+    return metrics.snapshot()
 
 
 @app.get("/v1/info")
@@ -61,8 +84,8 @@ def admin_info(auth=Depends(require_api_key)):
     role, _ = auth
     try:
         authorize(role, "admin")
-    except AuthorizationError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from None
+    except AuthorizationError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions.") from None
     return {"service": "incident-knowledge-assistant", "version": APPLICATION_VERSION, "security": "admin"}
 
 
@@ -77,13 +100,16 @@ def query(payload: QueryRequest, request: Request, auth=Depends(require_api_key)
     fingerprint = credential_fingerprint(api_key)
     logger.info("API request accepted request_id=%s role=%s credential=%s", request_id, role, fingerprint)
     try:
-        question = validate_query(payload.question)
-        top_k = validate_top_k(payload.top_k)
-        result = get_pipeline().ask(question=question, top_k=top_k, conversation_history=payload.conversation_history)
-        return QueryResponse(question=result["question"], answer=result["answer"], document_count=result["document_count"], request_id=request_id)
-    except (TypeError, ValueError) as exc:
-        logger.warning("API validation rejected request_id=%s error_type=%s", request_id, type(exc).__name__)
+        with timed_request(metrics):
+            question = validate_query(payload.question)
+            top_k = validate_top_k(payload.top_k)
+            result = get_pipeline().ask(question=question, top_k=top_k, conversation_history=payload.conversation_history)
+            return QueryResponse(question=result["question"], answer=result["answer"], document_count=result["document_count"], request_id=request_id)
+    except (TypeError, ValueError):
+        logger.warning("API validation rejected request_id=%s", request_id)
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid request payload.") from None
+    except HTTPException:
+        raise
     except Exception:
         logger.exception("API request failed request_id=%s", request_id)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Unable to process the request.") from None
