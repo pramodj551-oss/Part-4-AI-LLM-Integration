@@ -2,7 +2,7 @@
 from pathlib import Path
 
 PROJECT_NAME = "Incident Knowledge Assistant"
-PROJECT_VERSION = "1.0.1"
+PROJECT_VERSION = "1.0.2"
 AUTHOR = "Pramod Prakash Jadhav"
 DESCRIPTION = "Retrieval-Augmented Generation (RAG) application for incident knowledge search."
 ROOT_DIR = Path(__file__).resolve().parent.parent

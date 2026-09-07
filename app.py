@@ -1,30 +1,19 @@
-"""
-==========================================================
-Incident Knowledge Assistant (RAG)
-
-app.py
-
-Author : Pramod Prakash Jadhav
-==========================================================
-"""
+"""Incident Knowledge Assistant Streamlit application."""
 
 import streamlit as st
 
+from src.config import (
+    APPLICATION_VERSION,
+    INITIAL_SIDEBAR_STATE,
+    LAYOUT,
+    PAGE_ICON,
+    PAGE_TITLE,
+)
 from src.logger import get_logger
 from src.rag_pipeline import RAGPipeline
-
-from src.config import (
-    PAGE_TITLE,
-    PAGE_ICON,
-    LAYOUT,
-    INITIAL_SIDEBAR_STATE,
-)
+from src.runtime import readiness_status, safe_user_error
 
 logger = get_logger()
-
-# ======================================================
-# Streamlit Configuration
-# ======================================================
 
 st.set_page_config(
     page_title=PAGE_TITLE,
@@ -33,39 +22,19 @@ st.set_page_config(
     initial_sidebar_state=INITIAL_SIDEBAR_STATE,
 )
 
-# ======================================================
-# Cache Pipeline
-# ======================================================
 
 @st.cache_resource(show_spinner=True)
 def load_pipeline():
-    """
-    Load the RAG pipeline only once.
-    """
-
-    logger.info(
-        "Loading RAG Pipeline..."
-    )
-
+    """Load the RAG pipeline once per Streamlit process."""
+    logger.info("Loading RAG Pipeline")
     pipeline = RAGPipeline()
-
-    logger.info(
-        "Pipeline loaded successfully."
-    )
-
+    logger.info("RAG Pipeline loaded successfully")
     return pipeline
-    # ======================================================
-# Sidebar
-# ======================================================
+
 
 st.sidebar.title("🤖 Incident Knowledge Assistant")
-
 st.sidebar.markdown("---")
-
-st.sidebar.success(
-    "Production-ready RAG Pipeline"
-)
-
+st.sidebar.success("RAG application")
 st.sidebar.info(
     """
     • Semantic Search
@@ -74,48 +43,31 @@ st.sidebar.info(
 
     • Sentence Transformers
 
-    • Ollama LLM
+    • Groq LLM
 
-    • Streamlit Dashboard
+    • Streamlit UI
     """
 )
-
+st.sidebar.caption(f"Version {APPLICATION_VERSION}")
 st.sidebar.markdown("---")
 
-# ======================================================
-# Session State
-# ======================================================
-
 if "chat_history" not in st.session_state:
-
     st.session_state.chat_history = []
 
-# ======================================================
-# Load Pipeline
-# ======================================================
-
 try:
-
     pipeline = load_pipeline()
-
-except Exception as error:
-
-    st.error(
-        "Unable to initialize the AI Assistant."
-    )
-
-    st.exception(error)
-
+except Exception:
+    logger.exception("RAG pipeline initialization failed")
+    st.error(safe_user_error("Unable to initialize the AI Assistant. Please try again later."))
     st.stop()
-    # ======================================================
-# Main Interface
-# ======================================================
+
+status = readiness_status(pipeline, APPLICATION_VERSION)
+if status.status != "ready":
+    st.error("The AI Assistant is currently not ready.")
+    st.stop()
 
 st.title("🤖 Incident Knowledge Assistant")
-
-st.caption(
-    "Ask questions about incidents using the RAG knowledge base."
-)
+st.caption("Ask questions about incidents using the RAG knowledge base.")
 
 question = st.text_area(
     "Enter your question",
@@ -124,137 +76,47 @@ question = st.text_area(
 )
 
 col1, col2 = st.columns([1, 1])
-
 with col1:
-
-    ask_button = st.button(
-        "🔍 Ask Assistant",
-        use_container_width=True,
-    )
-
+    ask_button = st.button("🔍 Ask Assistant", use_container_width=True)
 with col2:
-
-    clear_button = st.button(
-        "🗑 Clear Chat",
-        use_container_width=True,
-    )
+    clear_button = st.button("🗑 Clear Chat", use_container_width=True)
 
 if clear_button:
-
     st.session_state.chat_history = []
-
     st.rerun()
 
-# ======================================================
-# Execute RAG Query
-# ======================================================
-
 if ask_button:
-
     if not question.strip():
-
-        st.warning(
-            "Please enter a question."
-        )
-
+        st.warning("Please enter a question.")
     else:
-
-        with st.spinner(
-            "Searching knowledge base..."
-        ):
-
+        with st.spinner("Searching knowledge base..."):
             try:
-
-                result = pipeline.ask(
-                    question=question
-                )
-
-                st.session_state.chat_history.append(
-                    result
-                )
-
-            except Exception as error:
-
-                logger.exception(
-                    "RAG execution failed."
-                )
-
-                st.error(str(error))
-                # ======================================================
-# Display Conversation
-# ======================================================
+                result = pipeline.ask(question=question)
+                st.session_state.chat_history.append(result)
+            except Exception:
+                logger.exception("RAG execution failed")
+                st.error(safe_user_error("Unable to process the request. Please try again."))
 
 if st.session_state.chat_history:
-
     st.markdown("---")
-
     st.subheader("Conversation")
 
-    for chat in reversed(
-        st.session_state.chat_history
-    ):
+    for chat in reversed(st.session_state.chat_history):
+        st.markdown(f"### ❓ Question\n{chat['question']}")
+        st.markdown(f"### 🤖 Answer\n{chat['answer']}")
 
-        st.markdown(
-            f"### ❓ Question\n{chat['question']}"
-        )
+        with st.expander("Retrieved Documents", expanded=False):
+            st.write(f"Documents Retrieved: {chat['document_count']}")
+            for index, document in enumerate(chat["documents"], start=1):
+                st.markdown(f"**Document {index}**")
+                st.write(document["document"])
+                st.caption(f"Distance: {document['distance']:.4f}")
 
-        st.markdown(
-            f"### 🤖 Answer\n{chat['answer']}"
-        )
-
-        with st.expander(
-            "Retrieved Documents",
-            expanded=False,
-        ):
-
-            st.write(
-                f"Documents Retrieved: "
-                f"{chat['document_count']}"
-            )
-
-            for index, document in enumerate(
-                chat["documents"],
-                start=1,
-            ):
-
-                st.markdown(
-                    f"**Document {index}**"
-                )
-
-                st.write(
-                    document["document"]
-                )
-
-                st.caption(
-                    f"Distance: "
-                    f"{document['distance']:.4f}"
-                )
-
-        with st.expander(
-            "Context Used",
-            expanded=False,
-        ):
-
-            st.text(
-                chat["context"]
-            )
+        with st.expander("Context Used", expanded=False):
+            st.text(chat["context"])
 
         st.markdown("---")
 
-# ======================================================
-# Footer
-# ======================================================
-
-st.sidebar.markdown("---")
-
-st.sidebar.caption(
-    "Incident Knowledge Assistant"
-)
-
-st.sidebar.caption(
-    "AI/LLM Integration - Part 4"
-)
-
-st.sidebar.caption(
-    "Developed by Pramod Prakash Jadhav"
-)
+st.sidebar.caption("Incident Knowledge Assistant")
+st.sidebar.caption("AI/LLM Integration - Part 4")
+st.sidebar.caption("Developed by Pramod Prakash Jadhav")
