@@ -6,6 +6,25 @@ The format follows the principles of Keep a Changelog and uses Semantic Versioni
 
 ---
 
+## [1.2.0] - 2026-09-07
+
+### Added
+
+- P6 secure session document upload for TXT, MD and CSV files.
+- Bounded upload count, file size and extracted document length.
+- UTF-8 and file-type validation.
+- Ephemeral session-only FAISS indexing for uploaded documents.
+- Persistent knowledge-base files are not modified by UI uploads.
+- Deterministic P6 regression tests for upload validation and bounds.
+
+### Security
+
+- Uploaded documents are isolated to the active Streamlit session.
+- Uploaded content is not persisted to the repository vector store or telemetry.
+- Unsupported extensions, oversized payloads, empty files and invalid UTF-8 are rejected.
+
+---
+
 ## [1.1.0] - 2026-09-07
 
 ### Added
@@ -35,11 +54,3 @@ The format follows the principles of Keep a Changelog and uses Semantic Versioni
 - Home, Incident Search, Knowledge Base, and Analytics pages.
 - RAG evaluation and privacy-safe observability.
 - Security, resilience, runtime readiness, and regression hardening through P0–P4.
-
-### Roadmap
-
-- Document upload from UI.
-- Metadata filtering.
-- Hybrid Search (FAISS + BM25).
-- Authentication and user feedback collection.
-- Multi-user support, cloud deployment, REST API, Docker support, advanced analytics, and role-based access control.
