@@ -27,14 +27,6 @@ def test_safe_answer_is_preserved():
 
 def test_retriever_relevance_guardrail_filters_low_relevance(monkeypatch):
     retriever = object.__new__(Retriever)
-    monkeypatch.setattr(
-        retriever.vector_store,
-        "similarity_search",
-        lambda query_embedding, top_k: [
-            {"document": "relevant", "distance": 0.8, "index": 0},
-            {"document": "irrelevant", "distance": 1.8, "index": 1},
-        ],
-    ) if hasattr(retriever, "vector_store") else None
 
     class Store:
         def similarity_search(self, query_embedding, top_k):
