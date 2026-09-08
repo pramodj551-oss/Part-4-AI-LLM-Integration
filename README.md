@@ -34,6 +34,38 @@ Operational Metrics / Health Probes
 
 Retrieved documents are the authoritative source for answers. Previous conversation is session-scoped, bounded, and treated only as untrusted reference material for conversational follow-ups.
 
+## H2.1 — Dedicated FastAPI Deployment
+
+The Part-4 application now has an explicit deployment split:
+
+```text
+GitHub: Part-4
+│
+├── Streamlit deployment
+│   └── app.py → UI
+│
+└── Render Web Service
+    └── Dockerfile → uvicorn api:app
+        ├── GET  /health
+        ├── GET  /ready
+        ├── GET  /metrics
+        └── POST /v1/query
+```
+
+**Deployment platform:** Render Web Service using the repository Dockerfile.
+
+The deployment contract is version-controlled in `render.yaml`. Render's `healthCheckPath` is `/health`, and deployment is configured to trigger from commits whose CI checks pass. The service uses Render's web-service `PORT` and the container remains locally compatible with port 8000 when `PORT` is not set.
+
+Required runtime configuration is supplied through the deployment platform, not source control:
+
+- `P8_API_KEY` — required user API credential.
+- `GROQ_API_KEY` — required for functional RAG/LLM queries.
+- `P8_ADMIN_API_KEY` — optional admin credential.
+
+Only the variable names are declared in `render.yaml`; secret values are intentionally not committed.
+
+See `docs/H2_1_DEDICATED_FASTAPI_DEPLOYMENT.md` for the deployment contract and live-evidence acceptance gates.
+
 ## P9 — Production Deployment & Operational Resilience
 
 P9 adds deployment and runtime safeguards for the FastAPI service:
