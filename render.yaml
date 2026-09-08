@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: part4-ai-cybersecurity-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: P8_API_KEY
+        sync: false
+      - key: P8_ADMIN_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
