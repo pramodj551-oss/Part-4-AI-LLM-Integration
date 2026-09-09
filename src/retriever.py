@@ -1,9 +1,8 @@
 """Production semantic retriever with safe session document support."""
 from pathlib import Path
 from sentence_transformers import SentenceTransformer
-from src.config import EMBEDDING_MODEL, TOP_K_RESULTS, FAISS_INDEX_PATH, DOCUMENTS_PATH, MAX_RETRIEVAL_DISTANCE
+from src.config import EMBEDDING_MODEL, EMBEDDING_BATCH_SIZE, NORMALIZE_EMBEDDINGS, TOP_K_RESULTS, FAISS_INDEX_PATH, DOCUMENTS_PATH, MAX_RETRIEVAL_DISTANCE
 from src.data_loader import DataLoader
-from src.embeddings import generate_embeddings
 from src.logger import get_logger
 from src.security import MAX_CONTEXT_LENGTH, query_fingerprint, validate_query, validate_top_k
 from src.vector_store import VectorStore
@@ -21,7 +20,13 @@ class Retriever:
         else:
             if not documents or any(not isinstance(item, str) or not item.strip() for item in documents):
                 raise ValueError("Session document collection must contain non-empty strings.")
-            _, embeddings = generate_embeddings(documents)
+            embeddings = self.embedder.encode(
+                documents,
+                batch_size=EMBEDDING_BATCH_SIZE,
+                convert_to_numpy=True,
+                normalize_embeddings=NORMALIZE_EMBEDDINGS,
+                show_progress_bar=False,
+            )
             self.vector_store.build_index(embeddings, documents)
         logger.info("Retriever initialized successfully.")
 
@@ -40,14 +45,20 @@ class Retriever:
         loader.remove_duplicates()
         loader.handle_missing_values()
         documents = loader.prepare_documents()
-        _, embeddings = generate_embeddings(documents)
+        embeddings = self.embedder.encode(
+            documents,
+            batch_size=EMBEDDING_BATCH_SIZE,
+            convert_to_numpy=True,
+            normalize_embeddings=NORMALIZE_EMBEDDINGS,
+            show_progress_bar=False,
+        )
         self.vector_store.build_index(embeddings, documents)
         self.vector_store.save()
 
     def embed_query(self, query: str):
         query = validate_query(query)
         logger.info("Embedding query fingerprint=%s", query_fingerprint(query))
-        return self.embedder.encode(query, convert_to_numpy=True)
+        return self.embedder.encode(query, convert_to_numpy=True, normalize_embeddings=NORMALIZE_EMBEDDINGS)
 
     def retrieve(self, query: str, top_k: int = TOP_K_RESULTS):
         query = validate_query(query)
