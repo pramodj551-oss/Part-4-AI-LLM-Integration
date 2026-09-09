@@ -11,6 +11,12 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY --chown=appuser:appuser . .
+
+# Runtime configuration creates these directories during module import.
+# Ensure the non-root production user can create/write runtime outputs and logs.
+RUN mkdir -p /app/data /app/outputs /app/vector_store \
+    && chown -R appuser:appuser /app
+
 USER appuser
 
 EXPOSE 8000
