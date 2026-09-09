@@ -9,7 +9,6 @@ from src.api_security import AuthenticationError, AuthorizationError, RateLimite
 from src.config import APPLICATION_VERSION
 from src.logger import get_logger
 from src.p9_resilience import RequestMetrics, timed_request
-from src.rag_pipeline import RAGPipeline
 from src.security import validate_query, validate_top_k
 
 logger = get_logger()
@@ -33,8 +32,10 @@ class QueryResponse(BaseModel):
 
 
 def get_pipeline():
+    """Lazy-load the heavyweight RAG stack only when a query actually needs it."""
     global _pipeline
     if _pipeline is None:
+        from src.rag_pipeline import RAGPipeline
         _pipeline = RAGPipeline()
     return _pipeline
 

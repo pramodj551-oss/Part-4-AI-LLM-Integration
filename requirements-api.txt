@@ -1,0 +1,19 @@
+# Dedicated FastAPI production dependencies for H2.1 Render deployment.
+# UI-only packages remain in requirements.txt for the Streamlit application.
+fastapi>=0.115.0
+uvicorn>=0.30.6
+httpx>=0.27.2
+pandas>=2.2.2
+numpy>=1.26.4
+sentence-transformers>=3.0.1
+faiss-cpu>=1.8.0.post1
+scikit-learn>=1.5.1
+torch>=2.4.0
+transformers>=4.44.2
+groq>=0.30.0
+requests>=2.32.3
+tqdm>=4.66.5
+joblib>=1.4.2
+python-dotenv>=1.0.1
+pydantic>=2.9.2
+typing-extensions>=4.12.2
