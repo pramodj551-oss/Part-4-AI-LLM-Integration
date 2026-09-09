@@ -78,3 +78,39 @@ def service_metrics():
 def info(auth=Depends(require_api_key)):
     role, _ = auth
     return {"service": "incident-knowledge-assistant", "version": APPLICATION_VERSION, "role": role}
+
+
+@app.get("/v1/admin/info")
+def admin_info(auth=Depends(require_api_key)):
+    role, _ = auth
+    try:
+        authorize(role, "admin")
+    except AuthorizationError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions.") from None
+    return {"service": "incident-knowledge-assistant", "version": APPLICATION_VERSION, "security": "admin"}
+
+
+@app.post("/v1/query", response_model=QueryResponse)
+def query(payload: QueryRequest, request: Request, auth=Depends(require_api_key)):
+    role, api_key = auth
+    client_id = request.client.host if request.client else "unknown"
+    if not limiter.allow(client_id):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Rate limit exceeded. Please retry later.")
+
+    request_id = str(uuid.uuid4())
+    fingerprint = credential_fingerprint(api_key)
+    logger.info("API request accepted request_id=%s role=%s credential=%s", request_id, role, fingerprint)
+    try:
+        with timed_request(metrics):
+            question = validate_query(payload.question)
+            top_k = validate_top_k(payload.top_k)
+            result = get_pipeline().ask(question=question, top_k=top_k, conversation_history=payload.conversation_history)
+            return QueryResponse(question=result["question"], answer=result["answer"], document_count=result["document_count"], request_id=request_id)
+    except (TypeError, ValueError):
+        logger.warning("API validation rejected request_id=%s", request_id)
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid request payload.") from None
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("API request failed request_id=%s", request_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Unable to process the request.") from None
