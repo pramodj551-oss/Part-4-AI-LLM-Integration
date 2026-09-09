@@ -1,3 +1,5 @@
+# Render Blueprint contract: keep this file at repository root so the Blueprint
+# source path remains unambiguous after repository/branch sync.
 services:
   - type: web
     name: part4-ai-cybersecurity-api
